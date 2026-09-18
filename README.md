@@ -227,7 +227,37 @@ A game that draws on the page itself can skip this step: the page's thread is he
 
 ### Step 4. The network
 
-Nothing is intercepted on its own — the wrapper goes wherever the game reaches the server from.
+Nothing is intercepted on its own, and which of the two ways to reach for depends on one thing:
+whether the library is kept behind a flag, as step 2 has it.
+
+#### Behind a flag: take the globals
+
+A game that hides the library behind a flag cannot mention it anywhere else. The client that builds
+its requests is ordinary code, shipped to everybody, and a plain import there would carry the whole
+library into the public build, flag or no flag.
+
+So the globals are taken instead, from the same dev-only place that called `startThrottle`:
+
+```ts
+import { installThrottledFetch, installThrottledEventSource } from '@custom-app/game-throttle'
+
+const undo = [installThrottledFetch(), installThrottledEventSource()]
+
+// put it all back
+undo.forEach((restore) => restore())
+```
+
+An installer takes the **current** value of the global and wraps that, so a wrapper another library
+put there before is kept: we stand on top of it rather than in place of it. Nothing else in the game
+has to change — its own `fetch` calls and `new EventSource(…)` go through these as they are.
+
+This is also the only way to reach requests leaving code you do not own: a payment SDK, analytics,
+an asset loader inside an engine.
+
+#### Always in the build: wrap it yourself
+
+Where the library ships with the game anyway — a harness, a build of its own, a transport module
+that is dev-only already — the wrapper can be handed straight to whatever makes the requests:
 
 ```ts
 import { createThrottledFetch } from '@custom-app/game-throttle'
@@ -255,24 +285,6 @@ const stream = new ThrottledEventSource('/api/events/subscribe?session_id=123')
 
 stream.onmessage = (event) => handle(JSON.parse(event.data))
 ```
-
-#### Where there is nowhere to put a wrapper
-
-Requests sometimes leave from code you do not own: a payment SDK, analytics, an asset loader inside
-an engine. There is no `fetch` of theirs to hand anything to. For that, the installers replace the
-globals once:
-
-```ts
-import { installThrottledFetch, installThrottledEventSource } from '@custom-app/game-throttle'
-
-const undo = [installThrottledFetch(), installThrottledEventSource()]
-
-// put it all back
-undo.forEach((restore) => restore())
-```
-
-An installer takes the **current** value of the global and wraps that, so a wrapper another library
-put there before is kept: we stand on top of it rather than in place of it.
 
 #### What the network does not cover
 
