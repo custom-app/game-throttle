@@ -1,6 +1,6 @@
 {
   "name": "@custom-app/game-throttle",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Makes a browser game act as if the machine under it were poorer: a slower processor, a weaker card, a worse line. Driven from wherever the game is embedded.",
   "type": "module",
   "license": "UNLICENSED",

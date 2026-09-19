@@ -205,8 +205,8 @@ export function GameThrottle({ worker }: { worker: Worker }) {
           // how many times over the scene is to spend its frame
           worker.postMessage({ kind: 'throttle', slowdown: settings.cpu.renderSlowdown })
 
-          // a multiplier on devicePixelRatio: 1 is what the screen asks, 2 is four times the pixels
-          worker.postMessage({ kind: 'viewport', resolution: devicePixelRatio * settings.resolution })
+          // the resolution itself, or the screen's own where none is asked for
+          worker.postMessage({ kind: 'viewport', resolution: settings.resolution ?? devicePixelRatio })
         },
 
         getRenderFrames: () => sceneFrames.current,
@@ -454,7 +454,8 @@ export function GameFrame({ gameUrl }: { gameUrl: string }) {
           />
           <Knob
             label="Resolution"
-            value={settings.resolution}
+            // null is the screen's own, and the frame shares the screen with the panel
+            value={settings.resolution ?? devicePixelRatio}
             min={0.25}
             max={3}
             step={0.25}

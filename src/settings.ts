@@ -20,8 +20,11 @@ export interface ThrottleSettings {
     /** Sheets the size of the frame, shaded into a texture nobody sees, every frame */
     fills: number
   }
-  /** What a game draws at against what the screen asks for. Not a burden of its own, a setting */
-  resolution: number
+  /**
+   * The resolution a game draws at, as `devicePixelRatio` counts it: 1 is one pixel to a CSS pixel,
+   * 2 is a Retina screen's own. Not a burden of its own, a setting. `null` leaves it to the screen
+   */
+  resolution: number | null
   network: {
     /** Added to the round trip of every request, and to every event of a stream */
     latencyMs: number
@@ -38,7 +41,7 @@ export interface ThrottleSettings {
 export const THROTTLE_OFF: ThrottleSettings = {
   cpu: { pageSlowdown: 1, renderSlowdown: 1 },
   gpu: { fills: 0 },
-  resolution: 1,
+  resolution: null,
   network: { latencyMs: 0, jitterMs: 0, lossRate: 0, kbps: 0 },
 }
 

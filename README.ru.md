@@ -205,8 +205,8 @@ export function GameThrottle({ worker }: { worker: Worker }) {
           // во сколько раз растянуть кадр сцены
           worker.postMessage({ kind: 'throttle', slowdown: settings.cpu.renderSlowdown })
 
-          // множитель к devicePixelRatio: 1 — как просит экран, 2 — вчетверо больше пикселей
-          worker.postMessage({ kind: 'viewport', resolution: devicePixelRatio * settings.resolution })
+          // само разрешение, а если его не задали — родное разрешение экрана
+          worker.postMessage({ kind: 'viewport', resolution: settings.resolution ?? devicePixelRatio })
         },
 
         getRenderFrames: () => sceneFrames.current,
@@ -456,7 +456,8 @@ export function GameFrame({ gameUrl }: { gameUrl: string }) {
           />
           <Knob
             label="Разрешение"
-            value={settings.resolution}
+            // null — родное разрешение экрана, а экран у фрейма с панелью общий
+            value={settings.resolution ?? devicePixelRatio}
             min={0.25}
             max={3}
             step={0.25}

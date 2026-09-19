@@ -15,7 +15,7 @@ export const THROTTLE_CHANNEL = 'game:throttle'
  * Raised only by a change that would break an older panel — a field renamed, a meaning changed, a
  * kind of message dropped. Adding an optional field leaves it where it is.
  */
-export const THROTTLE_VERSION = 1
+export const THROTTLE_VERSION = 2
 
 /** Everything a panel needs to draw itself, sent by the one side that knows: the game */
 export interface ThrottleOffer {
