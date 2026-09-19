@@ -20,7 +20,8 @@ export interface BridgeOptions {
 /**
  * The game's half of a panel that lives in whatever window opened it. The game speaks first — a
  * panel already waiting hears that the settings are supported and lets its button be pressed — and
- * answers again when asked, for a panel that came up too late to hear the first word.
+ * answers again when asked, for a panel that came up too late to hear the first word. The first word
+ * says no hello has been heard, since one sent before this was listening is lost for good.
  *
  * Nothing else is sent until the panel says hello: a game is embedded by casinos too, and none of
  * them asked to be told how its frames are going.
@@ -35,6 +36,7 @@ export const connectPanel = ({ getRenderFrames }: BridgeOptions = {}) => {
   const offer = (): ThrottleToPanel => ({
     channel: THROTTLE_CHANNEL,
     kind: 'ready',
+    isGreeted: panelOrigin !== null,
     version: THROTTLE_VERSION,
     settings: getThrottleSettings(),
     off: THROTTLE_OFF,

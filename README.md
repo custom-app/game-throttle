@@ -328,14 +328,18 @@ source.onmessage = (message) => {
 The panel is whatever window the game is embedded in. It knows nothing in advance: the settings and
 the presets both come from the game.
 
-The examples are React; the protocol cares for no framework, being `postMessage` and a listener.
+The panel's side of the conversation is `connectGame`: it takes the iframe element and two callbacks,
+and needs no framework. The greeting is its business too — whichever of the two windows comes up
+first, the other is heard, so a panel never has to time it.
+
+The examples are React.
 
 ```tsx
 // a React example
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  isThrottleMessage,
-  THROTTLE_CHANNEL,
+  connectGame,
+  type GameConnection,
   type ThrottleOffer,
   type ThrottleSettings,
   type ThrottleStats,
@@ -343,39 +347,38 @@ import {
 
 export function GameFrame({ gameUrl }: { gameUrl: string }) {
   const frameRef = useRef<HTMLIFrameElement>(null)
+  const connectionRef = useRef<GameConnection>(null)
 
   // empty until the game has spoken, and a game that has not spoken takes no settings
   const [offer, setOffer] = useState<ThrottleOffer | null>(null)
   const [stats, setStats] = useState<ThrottleStats | null>(null)
 
   useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      if (event.source !== frameRef.current?.contentWindow || !isThrottleMessage(event.data)) return
+    const frame = frameRef.current
 
-      if (event.data.kind === 'ready') setOffer(event.data)
-      if (event.data.kind === 'stats') setStats(event.data)
+    if (!frame) return
+
+    const connection = connectGame({ frame, onOffer: setOffer, onStats: setStats })
+
+    connectionRef.current = connection
+
+    return () => {
+      connectionRef.current = null
+      connection.stop()
     }
-
-    window.addEventListener('message', onMessage)
-
-    return () => window.removeEventListener('message', onMessage)
   }, [])
 
-  const gameOrigin = new URL(gameUrl).origin
-
-  const send = (message: object) => frameRef.current?.contentWindow?.postMessage(message, gameOrigin)
-
-  // greeted on every load of the frame: a game already up spoke while nobody was listening
+  // a reloaded game forgets the panel, and may no longer take the settings at all
   const greet = () => {
     setOffer(null)
     setStats(null)
-    send({ channel: THROTTLE_CHANNEL, kind: 'hello' })
+    connectionRef.current?.hello()
   }
 
   // the whole of the settings goes over, and is shown here at once
   const apply = (settings: ThrottleSettings) => {
     setOffer((current) => (current ? { ...current, settings } : current))
-    send({ channel: THROTTLE_CHANNEL, kind: 'set', settings })
+    connectionRef.current?.set(settings)
   }
 
   const settings = offer?.settings
@@ -552,9 +555,9 @@ The conversation in full:
 
 | Message | Sent by | When | What it carries |
 | --- | --- | --- | --- |
-| `ready` | game | at start, and in answer to `hello` | the version, the settings, what "off" looks like, the presets |
+| `ready` | game | at start, and in answer to `hello` | the version, the settings, what "off" looks like, the presets, and `isGreeted` — whether a hello has reached the game yet |
 | `stats` | game | twice a second, once a panel has said hello | the page's frames, the game's frames, the line's tally |
-| `hello` | panel | on every load of the frame | nothing |
+| `hello` | panel | on connecting, on every load of the frame, and in answer to a `ready` with `isGreeted: false` | nothing |
 | `set` | panel | on every change | the whole of the settings |
 
 ## Presets

@@ -330,14 +330,18 @@ source.onmessage = (message) => {
 Панель — то окно, куда встроена игра. Она ничего не знает заранее: и настройки, и пресеты приходят
 от игры.
 
-Примеры на React; протокол от фреймворка не зависит — это `postMessage` и слушатель `message`.
+Сторона панели — `connectGame`: принимает элемент iframe и два колбэка, фреймворк ей не нужен.
+Знакомство тоже на ней — какое бы из двух окон ни поднялось первым, второе его услышит, так что
+подгадывать момент панели не нужно.
+
+Примеры на React.
 
 ```tsx
 // пример на React
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  isThrottleMessage,
-  THROTTLE_CHANNEL,
+  connectGame,
+  type GameConnection,
   type ThrottleOffer,
   type ThrottleSettings,
   type ThrottleStats,
@@ -345,39 +349,38 @@ import {
 
 export function GameFrame({ gameUrl }: { gameUrl: string }) {
   const frameRef = useRef<HTMLIFrameElement>(null)
+  const connectionRef = useRef<GameConnection>(null)
 
   // пока пусто — игра не ответила, значит настроек она не принимает
   const [offer, setOffer] = useState<ThrottleOffer | null>(null)
   const [stats, setStats] = useState<ThrottleStats | null>(null)
 
   useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      if (event.source !== frameRef.current?.contentWindow || !isThrottleMessage(event.data)) return
+    const frame = frameRef.current
 
-      if (event.data.kind === 'ready') setOffer(event.data)
-      if (event.data.kind === 'stats') setStats(event.data)
+    if (!frame) return
+
+    const connection = connectGame({ frame, onOffer: setOffer, onStats: setStats })
+
+    connectionRef.current = connection
+
+    return () => {
+      connectionRef.current = null
+      connection.stop()
     }
-
-    window.addEventListener('message', onMessage)
-
-    return () => window.removeEventListener('message', onMessage)
   }, [])
 
-  const gameOrigin = new URL(gameUrl).origin
-
-  const send = (message: object) => frameRef.current?.contentWindow?.postMessage(message, gameOrigin)
-
-  // здороваемся на каждую загрузку фрейма: игра могла заговорить, пока мы не слушали
+  // перезагруженная игра забывает панель и может вообще перестать принимать настройки
   const greet = () => {
     setOffer(null)
     setStats(null)
-    send({ channel: THROTTLE_CHANNEL, kind: 'hello' })
+    connectionRef.current?.hello()
   }
 
   // отправляем настройки целиком и сразу показываем их у себя
   const apply = (settings: ThrottleSettings) => {
     setOffer((current) => (current ? { ...current, settings } : current))
-    send({ channel: THROTTLE_CHANNEL, kind: 'set', settings })
+    connectionRef.current?.set(settings)
   }
 
   const settings = offer?.settings
@@ -554,9 +557,9 @@ function Knob({
 
 | Сообщение | Кто шлёт | Когда | Что внутри |
 | --- | --- | --- | --- |
-| `ready` | игра | при старте и в ответ на `hello` | версия, текущие настройки, «выключенное» состояние, пресеты |
+| `ready` | игра | при старте и в ответ на `hello` | версия, текущие настройки, «выключенное» состояние, пресеты и `isGreeted` — дошёл ли до игры `hello` |
 | `stats` | игра | дважды в секунду, после `hello` | кадры страницы, кадры игры, счётчик сети |
-| `hello` | панель | при каждой загрузке фрейма | ничего |
+| `hello` | панель | при подключении, при каждой загрузке фрейма и в ответ на `ready` с `isGreeted: false` | ничего |
 | `set` | панель | при каждом изменении | настройки целиком |
 
 ## Пресеты
