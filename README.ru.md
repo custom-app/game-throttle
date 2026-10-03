@@ -256,6 +256,65 @@ undo.forEach((restore) => restore())
 Это же единственный способ дотянуться до запросов из чужого кода: SDK платёжки, аналитики,
 загрузчика ассетов внутри движка.
 
+#### Подменять до того, как игра пойдёт на сервер
+
+Установщик меняет только то, что создано **после** него. Запрос, который уже ушёл, и поток, который
+уже открыт, идут по-браузерному и такими остаются. Важнее всего поток: его открывают один раз и
+держат, поэтому поток, открытый на миг раньше, не тормозится вообще, что бы ни стояло в панели.
+
+За флагом библиотека приходит через `import()`, а это не мгновенно — в сборке это отдельный чанк,
+который грузится по сети, — пока игра уже логинится и открывает поток. Поэтому игра ждёт: всё, что
+ходит на сервер, монтируется только после подмены глобалей.
+
+```tsx
+// src/app/GameThrottle.tsx
+export function GameThrottle({ onReady }: { onReady: () => void }) {
+  useEffect(() => {
+    const stops: (() => void)[] = []
+    let isGone = false
+
+    import('@custom-app/game-throttle')
+      .then(({ installThrottledFetch, installThrottledEventSource, startThrottle }) => {
+        if (isGone) return
+
+        stops.push(installThrottledFetch(), installThrottledEventSource(), startThrottle())
+      })
+      .catch((error) => console.error(error))
+      // игру пропускаем при любом исходе: ту, которую нельзя затормозить, всё равно надо открыть, —
+      // и только от запуска, который ещё смонтирован, а не от выброшенного StrictMode
+      .finally(() => {
+        if (!isGone) onReady()
+      })
+
+    return () => {
+      isGone = true
+      stops.forEach((stop) => stop())
+    }
+  }, [onReady])
+
+  return null
+}
+```
+
+```tsx
+// src/app/App.tsx — в публичной сборке ждать нечего
+export function App() {
+  const [isReady, setIsReady] = useState(!import.meta.env.DEV_MODE)
+  const onReady = useCallback(() => setIsReady(true), [])
+
+  return (
+    <>
+      {/* лоадеру и сцене сервер не нужен, они держат экран, пока ждём */}
+      <Loader />
+      {isReady && <Game />}
+      {import.meta.env.DEV_MODE && <GameThrottle onReady={onReady} />}
+    </>
+  )
+}
+```
+
+Всё, что запрашивается вне шлюза — например, конфиг, нужный сцене или лоадеру, — ждёт тот же флаг.
+
 #### Всегда в сборке: оборачивать самому
 
 Если библиотека и так едет с игрой — стенд, отдельная сборка, дев-модуль транспорта, — обёртку

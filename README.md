@@ -254,6 +254,66 @@ has to change — its own `fetch` calls and `new EventSource(…)` go through th
 This is also the only way to reach requests leaving code you do not own: a payment SDK, analytics,
 an asset loader inside an engine.
 
+#### Install them before the game talks to the server
+
+An installer only changes what is made **after** it. A request already sent and a stream already
+open went out the browser's own way, and stay so. The stream is the one to watch: it is opened once
+and kept, so one opened a moment too soon is never slowed down at all, whatever the panel is set to.
+
+Behind a flag the library comes in through `import()`, which takes its time — in a build it is a
+chunk of its own, fetched over the network — while the game is already logging in and opening its
+stream. So the game waits: whatever talks to the server is mounted only once the globals are taken.
+
+```tsx
+// src/app/GameThrottle.tsx
+export function GameThrottle({ onReady }: { onReady: () => void }) {
+  useEffect(() => {
+    const stops: (() => void)[] = []
+    let isGone = false
+
+    import('@custom-app/game-throttle')
+      .then(({ installThrottledFetch, installThrottledEventSource, startThrottle }) => {
+        if (isGone) return
+
+        stops.push(installThrottledFetch(), installThrottledEventSource(), startThrottle())
+      })
+      .catch((error) => console.error(error))
+      // the game is let through either way, since one nobody can slow down still has to open —
+      // and only by the run still mounted, not one StrictMode has already thrown away
+      .finally(() => {
+        if (!isGone) onReady()
+      })
+
+    return () => {
+      isGone = true
+      stops.forEach((stop) => stop())
+    }
+  }, [onReady])
+
+  return null
+}
+```
+
+```tsx
+// src/app/App.tsx — the public build has nothing to wait for
+export function App() {
+  const [isReady, setIsReady] = useState(!import.meta.env.DEV_MODE)
+  const onReady = useCallback(() => setIsReady(true), [])
+
+  return (
+    <>
+      {/* the loader and the scene need no server, and keep the screen meanwhile */}
+      <Loader />
+      {isReady && <Game />}
+      {import.meta.env.DEV_MODE && <GameThrottle onReady={onReady} />}
+    </>
+  )
+}
+```
+
+Whatever is asked for outside the gate — a config the scene or the loader needs, say — waits for the
+same flag.
+
 #### Always in the build: wrap it yourself
 
 Where the library ships with the game anyway — a harness, a build of its own, a transport module
